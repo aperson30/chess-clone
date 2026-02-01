@@ -10,32 +10,44 @@ class StockfishEngine {
   private worker: Worker | null = null;
   private onMessage: (msg: string) => void = () => {};
 
-  async init() {
+  async init(): Promise<void> {
     if (this.worker) return;
 
-    try {
-      // Using Stockfish 16.1 for much better accuracy and standard starting evaluations
-      const stockfishUrl = 'https://cdn.jsdelivr.net/npm/stockfish.js@16.0.0/stockfish.js';
-      const response = await fetch(stockfishUrl);
-      const script = await response.text();
-      const blob = new Blob([script], { type: 'application/javascript' });
-      const workerUrl = URL.createObjectURL(blob);
-      
-      this.worker = new Worker(workerUrl);
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        if (this.worker) resolve(); // Proceed even if no readyok (worker may still work)
+      }, 8000);
+      try {
+        // Stockfish.js@16.0.0 doesn't exist - use 'stockfish' package (v16) instead.
+        // Single-threaded build works in most browsers; worker needs direct URL so .wasm loads from same CDN path.
+        const stockfishWorkerUrl = 'https://cdn.jsdelivr.net/npm/stockfish@16.0.0/src/stockfish-nnue-16-single.js';
+        this.worker = new Worker(stockfishWorkerUrl);
 
-      this.worker.onmessage = (e) => {
-        if (typeof e.data === 'string') {
-          this.onMessage(e.data);
-        }
-      };
+        this.worker.onmessage = (e) => {
+          const msg = typeof e.data === 'string' ? e.data : (e.data?.data ?? String(e.data ?? ''));
+          if (msg === 'readyok') {
+            clearTimeout(timeout);
+            resolve();
+          }
+          this.onMessage(msg);
+        };
 
-      this.sendCommand('uci');
-      this.sendCommand('setoption name Hash value 32');
-      this.sendCommand('ucinewgame');
-      this.sendCommand('isready');
-    } catch (error) {
-      console.error("Failed to initialize Stockfish:", error);
-    }
+        this.worker.onerror = (err) => {
+          clearTimeout(timeout);
+          console.error("Stockfish worker error:", err);
+          reject(err);
+        };
+
+        this.sendCommand('uci');
+        this.sendCommand('setoption name Hash value 32');
+        this.sendCommand('ucinewgame');
+        this.sendCommand('isready');
+      } catch (error) {
+        clearTimeout(timeout);
+        console.error("Failed to initialize Stockfish:", error);
+        reject(error);
+      }
+    });
   }
 
   sendCommand(command: string) {
