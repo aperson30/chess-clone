@@ -186,6 +186,11 @@ class StockfishEngine {
             lastResult.pv = pvParts.slice(0, 5).join(' ');
           }
         } else if (msg.startsWith('bestmove')) {
+          // Robustly grab the best move from the final line if info didn't catch it
+          const parts = msg.split(' ');
+          if (parts.length > 1 && parts[1] !== '(none)') {
+             lastResult.bestMove = parts[1];
+          }
           this.onMessage = () => {}; 
           resolve(lastResult);
         }

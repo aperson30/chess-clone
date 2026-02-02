@@ -11,18 +11,40 @@ import { INITIAL_FEN } from './constants';
 import { engine } from './engineService';
 import { BoltIcon } from '@heroicons/react/24/outline';
 
-// Professional move classification thresholds
+// --- CHESS.COM STYLE MATH HELPERS ---
+
+/**
+ * Converts raw centipawns to a winning percentage (0 to 100).
+ * Uses a sigmoid curve so that differences in equal positions matter more 
+ * than differences in completely won/lost positions.
+ */
+const getWinChance = (centipawns: number): number => {
+  // A standard constant used to map Stockfish CP to Win %.
+  // 100 cp (1 pawn) usually equates to roughly 50% -> 60-64% win chance.
+  const c = 1.5; 
+  return 50 + 50 * (2 / (1 + Math.exp(-0.004 * centipawns)) - 1);
+};
+
+// Professional move classification thresholds based on Win Chance Loss, not just CP
 const classifyMove = (prevScore: number, currentScore: number, isBest: boolean, isWhite: boolean): MoveClassification => {
-  const loss = isWhite ? (prevScore - currentScore) : (currentScore - prevScore);
+  // Convert absolute CP scores to Win Chances
+  const prevWin = getWinChance(isWhite ? prevScore : -prevScore);
+  const currentWin = getWinChance(isWhite ? currentScore : -currentScore);
   
+  // Calculate how much "Win Probability" was lost
+  const winChanceLoss = Math.max(0, prevWin - currentWin);
+
   if (isBest) return MoveClassification.BEST;
+
+  // These thresholds essentially mimic CAPS logic
+  if (winChanceLoss <= 2) return MoveClassification.EXCELLENT; // Hardly lost any winning chances
+  if (winChanceLoss <= 8) return MoveClassification.GOOD;
+  if (winChanceLoss <= 15) return MoveClassification.INACCURACY;
+  if (winChanceLoss <= 25) return MoveClassification.MISTAKE;
+  if (winChanceLoss > 25) return MoveClassification.BLUNDER;
   
-  if (loss <= 15) return MoveClassification.EXCELLENT;
-  if (loss <= 45) return MoveClassification.GOOD;
-  if (loss <= 100) return MoveClassification.INACCURACY;
-  if (loss <= 250) return MoveClassification.MISTAKE;
-  if (loss <= 500) return MoveClassification.MISS;
-  return MoveClassification.BLUNDER;
+  // Fallback
+  return MoveClassification.MISS; 
 };
 
 const createEmptyStats = (): GameStats => ({
@@ -39,7 +61,7 @@ const createEmptyStats = (): GameStats => ({
     [MoveClassification.MISS]: 0,
     [MoveClassification.BLUNDER]: 0,
   },
-  ratingEstimate: 1200
+  ratingEstimate: 400 // Floor rating
 });
 
 const App: React.FC = () => {
@@ -51,6 +73,7 @@ const App: React.FC = () => {
   const [evaluation, setEvaluation] = useState(0);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [showBestMove, setShowBestMove] = useState(true);
 
   // Initialize engine
   useEffect(() => {
@@ -96,6 +119,9 @@ const App: React.FC = () => {
     const evalHistory: number[] = [0];
     const moveSANs: string[] = [];
     const moveClassifications: MoveClassification[] = [];
+    const whiteAccuracyScores: number[] = [];
+    const blackAccuracyScores: number[] = [];
+    const bestMoves: string[] = [];
 
     const whiteStats = createEmptyStats();
     const blackStats = createEmptyStats();
@@ -106,22 +132,46 @@ const App: React.FC = () => {
       // Initial eval for move comparison
       const initialEvalRes = await engine.getAnalysis(INITIAL_FEN, 10);
       let lastEval = initialEvalRes.score;
+      bestMoves.push(initialEvalRes.bestMove);
 
       // Analyze each move
       for (let i = 0; i < historyVerbose.length; i++) {
         const move = historyVerbose[i];
-        
-        // Before playing the move, what was the best move in the position?
-        // (Simple version: we classify based on centipawn loss)
+        const isWhite = i % 2 === 0;
+
         playbackGame.move(move);
         moveSANs.push(move.san);
         const currentFen = playbackGame.fen();
         
-        const currentEval = await engine.getAnalysis(currentFen, 11);
+        // Depth 13 provides a good balance of speed vs accuracy for browser analysis
+        const currentEval = await engine.getAnalysis(currentFen, 13);
         const score = currentEval.score;
         evalHistory.push(score);
+        bestMoves.push(currentEval.bestMove);
         
-        const isWhite = i % 2 === 0;
+        // --- ACCURACY CALCULATION LOGIC ---
+        // 1. Get Win% of the position BEFORE the move was played
+        const prevWinPercent = getWinChance(isWhite ? lastEval : -lastEval);
+
+        // 2. Get Win% of the position AFTER the move (Actual Result)
+        const currentWinPercent = getWinChance(isWhite ? score : -score);
+        
+        // 3. (Simplified) We assume the "Best Move" would have maintained the previous evaluation roughly
+        // In a real server-side app, we would calculate the Best Move's specific eval. 
+        // Here, we approximate Best Move Win % as the Prev Win % (unless user improved position).
+        const bestMoveWinPercent = Math.max(prevWinPercent, currentWinPercent);
+
+        // 4. Calculate Accuracy for this specific move (0-100)
+        // Formula: 100 - (Difference in Win Probability * Weighting)
+        const diff = Math.max(0, bestMoveWinPercent - currentWinPercent);
+        
+        // This weighting curve ensures small mistakes don't tank score, but blunders do
+        const moveAccuracy = Math.max(0, 100 - (diff * 2)); 
+        
+        if (isWhite) whiteAccuracyScores.push(moveAccuracy);
+        else blackAccuracyScores.push(moveAccuracy);
+
+        // Classification
         const classification = classifyMove(lastEval, score, false, isWhite);
         moveClassifications.push(classification);
         
@@ -132,43 +182,35 @@ const App: React.FC = () => {
         setAnalysisProgress(Math.round(((i + 1) / historyVerbose.length) * 100));
       }
 
-      const calculateAccuracy = (stats: GameStats, totalMoves: number) => {
-        if (totalMoves === 0) return 100;
-        const weights = {
-          [MoveClassification.BRILLIANT]: 1,
-          [MoveClassification.GREAT]: 1,
-          [MoveClassification.BEST]: 1,
-          [MoveClassification.EXCELLENT]: 0.95,
-          [MoveClassification.GOOD]: 0.8,
-          [MoveClassification.BOOK]: 1,
-          [MoveClassification.INACCURACY]: 0.5,
-          [MoveClassification.MISTAKE]: 0.2,
-          [MoveClassification.MISS]: 0,
-          [MoveClassification.BLUNDER]: -0.5
-        };
-        
-        let sum = 0;
-        Object.entries(stats.moves).forEach(([key, count]) => {
-          sum += count * weights[key as MoveClassification];
-        });
-        
-        return Math.max(0, Math.min(100, (sum / totalMoves) * 100));
+      // Final Aggregation
+      const calculateAverageAccuracy = (scores: number[]) => {
+        if (scores.length === 0) return 0;
+        return scores.reduce((a, b) => a + b, 0) / scores.length;
       };
 
-      const whiteMoveCount = Math.ceil(historyVerbose.length / 2);
-      const blackMoveCount = Math.floor(historyVerbose.length / 2);
+      const calculateRatingEstimate = (accuracy: number) => {
+         // This is a rough curve fitting based on general player population stats
+         // 50% ~ 400 ELO
+         // 95% ~ 2400 ELO
+         if (accuracy < 20) return 200;
+         if (accuracy < 50) return 400 + (accuracy * 10);
+         // Exponential growth for higher accuracy
+         return Math.round(600 + Math.pow(accuracy, 1.65) / 10);
+      };
 
-      whiteStats.accuracy = calculateAccuracy(whiteStats, whiteMoveCount);
-      blackStats.accuracy = calculateAccuracy(blackStats, blackMoveCount);
-      whiteStats.ratingEstimate = Math.round(800 + whiteStats.accuracy * 18);
-      blackStats.ratingEstimate = Math.round(800 + blackStats.accuracy * 18);
+      whiteStats.accuracy = calculateAverageAccuracy(whiteAccuracyScores);
+      blackStats.accuracy = calculateAverageAccuracy(blackAccuracyScores);
+      
+      whiteStats.ratingEstimate = calculateRatingEstimate(whiteStats.accuracy);
+      blackStats.ratingEstimate = calculateRatingEstimate(blackStats.accuracy);
 
       setReviewData({
         white: whiteStats,
         black: blackStats,
         evalHistory,
         moveHistory: moveSANs,
-        moveClassifications
+        moveClassifications,
+        bestMoves
       });
       setMode(AppMode.GAME_REVIEW);
       setGame(new Chess());
@@ -249,6 +291,7 @@ const App: React.FC = () => {
             setGame(new Chess());
             setFen(INITIAL_FEN);
             setCurrentMoveIndex(-1);
+            setShowBestMove(false);
           }
           setMode(newMode);
         }} 
@@ -286,6 +329,7 @@ const App: React.FC = () => {
                 onMove={handleMove}
                 isDraggable={mode !== AppMode.GAME_REVIEW}
                 lastMove={getCurrentMoveData()}
+                bestMove={showBestMove && reviewData ? reviewData.bestMoves[currentMoveIndex + 1] : null}
               />
             </div>
             {mode === AppMode.GAME_REVIEW && reviewData && (
@@ -299,6 +343,8 @@ const App: React.FC = () => {
                 totalMoves={reviewData.moveHistory.length}
                 currentMoveSAN={reviewData.moveHistory[currentMoveIndex]}
                 currentMoveClassification={reviewData.moveClassifications[currentMoveIndex]}
+                showBestMove={showBestMove}
+                onToggleBestMove={() => setShowBestMove(!showBestMove)}
               />
             )}
           </div>

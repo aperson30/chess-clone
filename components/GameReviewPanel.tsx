@@ -12,7 +12,9 @@ import {
   TrophyIcon,
   FireIcon,
   UserIcon,
-  BoltIcon
+  BoltIcon,
+  EyeIcon,
+  EyeSlashIcon
 } from '@heroicons/react/24/solid';
 import { GameReviewData, MoveClassification } from '../types';
 
@@ -26,6 +28,8 @@ interface GameReviewPanelProps {
   totalMoves: number;
   currentMoveSAN?: string;
   currentMoveClassification?: MoveClassification;
+  showBestMove: boolean;
+  onToggleBestMove: () => void;
 }
 
 const StatRow: React.FC<{ 
@@ -103,7 +107,9 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({
   currentMoveIndex, 
   totalMoves,
   currentMoveSAN,
-  currentMoveClassification
+  currentMoveClassification,
+  showBestMove,
+  onToggleBestMove
 }) => {
   const isReviewing = currentMoveIndex >= 0;
 
@@ -161,7 +167,7 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({
             <div className="flex flex-col items-center gap-1 mb-2">
               <BoltIcon className="w-10 h-10 text-[#81b64c]" />
               <h2 className="text-2xl font-black uppercase tracking-tighter">Game Review</h2>
-              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Powered by Stockfish 17.1 Lite</p>
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Powered by Stockfish 16.1 Lite</p>
             </div>
             
             <div className="w-full flex justify-around items-center">
@@ -207,7 +213,7 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({
               </div>
            </div>
            <div className="text-right">
-              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Stockfish 17.1</p>
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Stockfish 16.1</p>
               <p className="text-[11px] font-black text-emerald-500">Depth 18</p>
            </div>
         </div>
@@ -234,7 +240,7 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({
         <StatRow colorClass="text-cyan-400" label="Brilliant" white={data.white.moves.BRILLIANT} black={data.black.moves.BRILLIANT} icon={<div className="font-black text-[10px]">!!</div>} />
         <StatRow colorClass="text-blue-500" label="Great" white={data.white.moves.GREAT} black={data.black.moves.GREAT} icon={<div className="font-black text-[10px]">!</div>} />
         <StatRow colorClass="text-green-500" label="Best" white={data.white.moves.BEST} black={data.black.moves.BEST} icon={<StarIcon className="w-4 h-4" />} />
-        <StatRow colorClass="text-emerald-400" label="Book" white={data.white.moves.BOOK} black={data.black.moves.BOOK} icon={<BookOpenIcon className="w-4 h-4" />} />
+        <StatRow colorClass="text-[#cc8953]" label="Book" white={data.white.moves.BOOK} black={data.black.moves.BOOK} icon={<BookOpenIcon className="w-4 h-4" />} />
         <StatRow colorClass="text-orange-400" label="Mistake" white={data.white.moves.MISTAKE} black={data.black.moves.MISTAKE} icon={<div className="font-black text-[10px]">?</div>} />
         <StatRow colorClass="text-red-500" label="Blunder" white={data.white.moves.BLUNDER} black={data.black.moves.BLUNDER} icon={<div className="font-black text-[10px]">??</div>} />
       </div>
@@ -243,7 +249,17 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({
         <div className="px-4 py-4 bg-[#1a1917] border-y border-[#312e2b] mt-2 shadow-inner">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-black text-gray-500 uppercase tracking-[0.2em]">Live Playback</span>
-            <span className="text-[11px] font-black text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded">{currentMoveIndex + 1} / {totalMoves}</span>
+            
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={onToggleBestMove}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition-colors border ${showBestMove ? 'bg-orange-500/10 text-orange-400 border-orange-500/50' : 'bg-[#262421] text-gray-500 border-white/10 hover:border-white/30'}`}
+              >
+                 {showBestMove ? <EyeIcon className="w-3 h-3" /> : <EyeSlashIcon className="w-3 h-3" />}
+                 Best Move
+              </button>
+              <span className="text-[11px] font-black text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded">{currentMoveIndex + 1} / {totalMoves}</span>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <button 

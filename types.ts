@@ -70,4 +70,5 @@ export interface GameReviewData {
   evalHistory: number[];
   moveHistory: string[]; // SAN
   moveClassifications: MoveClassification[];
+  bestMoves: string[]; // LAN (e.g. "e2e4")
 }

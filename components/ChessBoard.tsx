@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { Chess, Square as ChessSquare } from 'chess.js';
 import { PIECE_IMAGES } from '../constants';
 import { MoveClassification } from '../types';
@@ -20,6 +20,7 @@ interface ChessBoardProps {
     to: string;
     classification?: MoveClassification;
   } | null;
+  bestMove?: string | null; // e.g., "e2e4"
 }
 
 const QualityMarker: React.FC<{ classification: MoveClassification }> = ({ classification }) => {
@@ -35,7 +36,7 @@ const QualityMarker: React.FC<{ classification: MoveClassification }> = ({ class
     case MoveClassification.GOOD:
       return <div className={`${baseClass} bg-emerald-400 text-white`}><CheckIcon className="w-3.5 h-3.5 stroke-[3]" /></div>;
     case MoveClassification.BOOK:
-      return <div className={`${baseClass} bg-[#d5a077] text-white`}><BookOpenIcon className="w-3.5 h-3.5" /></div>;
+      return <div className={`${baseClass} bg-[#cc8953] text-white`}><BookOpenIcon className="w-3.5 h-3.5" /></div>;
     case MoveClassification.MISS:
       return <div className={`${baseClass} bg-red-400 text-white`}><XMarkIcon className="w-3.5 h-3.5 stroke-[3]" /></div>;
     case MoveClassification.BLUNDER:
@@ -47,7 +48,58 @@ const QualityMarker: React.FC<{ classification: MoveClassification }> = ({ class
   }
 };
 
-const ChessBoard: React.FC<ChessBoardProps> = ({ fen, onMove, isDraggable = true, lastMove }) => {
+const BestMoveArrow: React.FC<{ move: string }> = ({ move }) => {
+  const arrowId = useId();
+  if (!move || move.length < 4 || move === '(none)') return null;
+
+  const from = move.substring(0, 2);
+  const to = move.substring(2, 4);
+
+  if (from === to) return null;
+
+  const getCoords = (sq: string) => {
+    const col = sq.charCodeAt(0) - 97;
+    const row = 8 - parseInt(sq[1]);
+    return { x: col * 12.5 + 6.25, y: row * 12.5 + 6.25 };
+  };
+
+  const start = getCoords(from);
+  const end = getCoords(to);
+
+  const markerId = `arrowhead-${arrowId.replace(/:/g, '')}`;
+
+  return (
+    <svg className="absolute inset-0 w-full h-full pointer-events-none z-20 overflow-visible">
+      <defs>
+        <marker
+          id={markerId}
+          markerWidth="4"
+          markerHeight="3"
+          refX="3.5"
+          refY="1.5"
+          orient="auto"
+        >
+          <polygon points="0 0, 4 1.5, 0 3" fill="#fbbf24" opacity="0.6" />
+        </marker>
+      </defs>
+      <line
+        x1={`${start.x}%`}
+        y1={`${start.y}%`}
+        x2={`${end.x}%`}
+        y2={`${end.y}%`}
+        stroke="#fbbf24"
+        strokeWidth="2%"
+        strokeLinecap="round"
+        opacity="0.6"
+        markerEnd={`url(#${markerId})`}
+        markerStart="none"
+        style={{ filter: 'drop-shadow(0px 2px 2px rgba(0,0,0,0.5))' }}
+      />
+    </svg>
+  );
+};
+
+const ChessBoard: React.FC<ChessBoardProps> = ({ fen, onMove, isDraggable = true, lastMove, bestMove }) => {
   const [game, setGame] = useState(new Chess(fen));
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   const [validMoves, setValidMoves] = useState<string[]>([]);
@@ -143,6 +195,7 @@ const ChessBoard: React.FC<ChessBoardProps> = ({ fen, onMove, isDraggable = true
       <div className="chess-board-grid h-full relative z-0">
         {renderBoard()}
       </div>
+      {bestMove && <BestMoveArrow move={bestMove} />}
     </div>
   );
 };
