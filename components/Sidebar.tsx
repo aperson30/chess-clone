@@ -44,7 +44,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentMode, onModeChange, evaluation
   return (
     <div className="w-80 bg-[#21201d] h-full flex flex-col border-r border-[#312e2b] overflow-y-auto z-10">
       <div className="p-8 text-center border-b border-[#312e2b]">
-        <h1 className="text-emerald-500 font-black tracking-widest text-xl uppercase italic">ChessMaster<span className="text-white not-italic">AI</span></h1>
+        <h1 className="text-emerald-500 font-black tracking-widest text-xl uppercase italic">Chess<span className="text-white not-italic">Depth</span></h1>
       </div>
       
       {/* Live Score Display - Only shown when requested */}
@@ -75,7 +75,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentMode, onModeChange, evaluation
         />
         <NavItem 
           icon={<PuzzlePieceIcon className="w-6 h-6" />} 
-          label="Daily Puzzles" 
+          label="Puzzles" 
           active={currentMode === AppMode.PUZZLES}
           onClick={() => onModeChange(AppMode.PUZZLES)}
           color="text-orange-400"
