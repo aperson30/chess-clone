@@ -214,7 +214,7 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({
            </div>
            <div className="text-right">
               <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Stockfish 16.1</p>
-              <p className="text-[11px] font-black text-emerald-500">Depth 18</p>
+              <p className="text-[11px] font-black text-emerald-500">Depth {data.depth || 13}</p>
            </div>
         </div>
       )}

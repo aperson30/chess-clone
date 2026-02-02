@@ -74,6 +74,7 @@ const App: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [showBestMove, setShowBestMove] = useState(true);
+  const [estimatedTime, setEstimatedTime] = useState<string>('Calculating...');
 
   // Initialize engine
   useEffect(() => {
@@ -96,9 +97,11 @@ const App: React.FC = () => {
     }
   }, [game]);
 
-  const handlePGNUpload = async (pgn: string) => {
+  const handlePGNUpload = async (pgn: string, depth: number = 12) => {
     setIsAnalyzing(true);
     setAnalysisProgress(0);
+    setEstimatedTime('Preparing analysis...');
+    
     const tempGame = new Chess();
     try {
       tempGame.loadPgn(pgn);
@@ -129,10 +132,12 @@ const App: React.FC = () => {
     try {
       await engine.init();
       
-      // Initial eval for move comparison
-      const initialEvalRes = await engine.getAnalysis(INITIAL_FEN, 10);
+      // Initial eval for move comparison - Use selected depth for consistency
+      const initialEvalRes = await engine.getAnalysis(INITIAL_FEN, depth);
       let lastEval = initialEvalRes.score;
       bestMoves.push(initialEvalRes.bestMove);
+
+      const startTime = performance.now();
 
       // Analyze each move
       for (let i = 0; i < historyVerbose.length; i++) {
@@ -143,8 +148,8 @@ const App: React.FC = () => {
         moveSANs.push(move.san);
         const currentFen = playbackGame.fen();
         
-        // Depth 13 provides a good balance of speed vs accuracy for browser analysis
-        const currentEval = await engine.getAnalysis(currentFen, 13);
+        // Use selected depth for analysis
+        const currentEval = await engine.getAnalysis(currentFen, depth);
         const score = currentEval.score;
         evalHistory.push(score);
         bestMoves.push(currentEval.bestMove);
@@ -180,6 +185,20 @@ const App: React.FC = () => {
         
         lastEval = score;
         setAnalysisProgress(Math.round(((i + 1) / historyVerbose.length) * 100));
+
+        // Update estimated time
+        const now = performance.now();
+        const elapsed = now - startTime;
+        const movesProcessed = i + 1;
+        const avgTimePerMove = elapsed / movesProcessed;
+        const remainingMoves = historyVerbose.length - movesProcessed;
+        const remainingMs = remainingMoves * avgTimePerMove;
+
+        if (remainingMs > 60000) {
+           setEstimatedTime(`~${Math.ceil(remainingMs / 60000)} min remaining`);
+        } else {
+           setEstimatedTime(`${Math.ceil(remainingMs / 1000)}s remaining`);
+        }
       }
 
       // Final Aggregation
@@ -210,7 +229,8 @@ const App: React.FC = () => {
         evalHistory,
         moveHistory: moveSANs,
         moveClassifications,
-        bestMoves
+        bestMoves,
+        depth // Store the selected depth
       });
       setMode(AppMode.GAME_REVIEW);
       setGame(new Chess());
@@ -313,6 +333,9 @@ const App: React.FC = () => {
                <p className="text-white font-black text-2xl tracking-tighter">STOCKFISH IS THINKING</p>
                <p className="text-[#81b64c] font-black uppercase tracking-widest text-xs opacity-80">
                  Analyzing Position {analysisProgress}%
+               </p>
+               <p className="text-gray-500 font-bold text-[10px] uppercase tracking-wider mt-1 animate-pulse">
+                 {estimatedTime}
                </p>
             </div>
           </div>

@@ -71,4 +71,5 @@ export interface GameReviewData {
   moveHistory: string[]; // SAN
   moveClassifications: MoveClassification[];
   bestMoves: string[]; // LAN (e.g. "e2e4")
+  depth: number;
 }
