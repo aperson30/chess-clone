@@ -1,22 +1,23 @@
 
 import { Chess, Move } from 'chess.js';
 
-// Using standard open-source chess sounds
-const SOUNDS = {
-  move: new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_common/default/move-self.mp3'),
-  capture: new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_common/default/capture.mp3'),
-  check: new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_common/default/move-check.mp3'),
-  castle: new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_common/default/castle.mp3'),
-  promote: new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_common/default/promote.mp3'),
-  notify: new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_common/default/notify.mp3'), // Puzzle Success
-  illegal: new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_common/default/illegal.mp3'), // Wrong Move
-  gameEnd: new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_common/default/game-end.mp3'),
+// Reliable audio sources (Lichess GitHub Raw)
+// We use these because they are open source, reliable, and CORS-friendly.
+const AUDIO_MAP = {
+  move: new Audio('https://raw.githubusercontent.com/lichess-org/lila/master/public/sound/standard/Move.mp3'),
+  capture: new Audio('https://raw.githubusercontent.com/lichess-org/lila/master/public/sound/standard/Capture.mp3'),
+  check: new Audio('https://raw.githubusercontent.com/lichess-org/lila/master/public/sound/standard/GenericNotify.mp3'),
+  castle: new Audio('https://raw.githubusercontent.com/lichess-org/lila/master/public/sound/standard/Move.mp3'), // Lichess uses move sound for castle
+  promote: new Audio('https://raw.githubusercontent.com/lichess-org/lila/master/public/sound/standard/Confirmation.mp3'),
+  notify: new Audio('https://raw.githubusercontent.com/lichess-org/lila/master/public/sound/standard/Victory.mp3'),
+  illegal: new Audio('https://raw.githubusercontent.com/lichess-org/lila/master/public/sound/standard/Error.mp3'), // Use Error for failure
+  gameEnd: new Audio('https://raw.githubusercontent.com/lichess-org/lila/master/public/sound/standard/Victory.mp3'),
 };
 
-// Pre-load sounds
-Object.values(SOUNDS).forEach(audio => {
+// Pre-load and configure
+Object.values(AUDIO_MAP).forEach(audio => {
   audio.load();
-  audio.volume = 0.5;
+  audio.volume = 0.7; // Good volume level
 });
 
 export const playMoveSound = (game: Chess, move: Move) => {
@@ -25,36 +26,38 @@ export const playMoveSound = (game: Chess, move: Move) => {
   const isCastle = move.san.includes('O-O');
   const isPromote = move.promotion !== undefined;
 
-  // Reset current time to allow rapid re-play
   const play = (audio: HTMLAudioElement) => {
-    audio.currentTime = 0;
-    audio.play().catch(e => console.warn("Audio play failed", e));
+    // Clone to allow overlapping sounds (rapid moves)
+    const sound = audio.cloneNode() as HTMLAudioElement;
+    sound.volume = 0.7;
+    sound.play().catch(e => console.warn("Sound play blocked or failed:", e));
   };
 
   if (isCheck) {
-    play(SOUNDS.check);
+    play(AUDIO_MAP.check);
   } else if (isPromote) {
-    play(SOUNDS.promote);
-  } else if (isCastle) {
-    play(SOUNDS.castle);
+    play(AUDIO_MAP.promote);
   } else if (isCapture) {
-    play(SOUNDS.capture);
+    play(AUDIO_MAP.capture);
+  } else if (isCastle) {
+    play(AUDIO_MAP.castle); // Castling is technically a move, but we can check if we want a special sound
   } else {
-    play(SOUNDS.move);
+    play(AUDIO_MAP.move);
   }
 };
 
 export const playFeedbackSound = (type: 'success' | 'failure' | 'game-end') => {
   const play = (audio: HTMLAudioElement) => {
-    audio.currentTime = 0;
-    audio.play().catch(e => console.warn("Audio play failed", e));
+    const sound = audio.cloneNode() as HTMLAudioElement;
+    sound.volume = 0.7;
+    sound.play().catch(e => console.warn("Sound play blocked or failed:", e));
   };
 
   if (type === 'success') {
-    play(SOUNDS.notify);
+    play(AUDIO_MAP.notify);
   } else if (type === 'failure') {
-    play(SOUNDS.illegal);
+    play(AUDIO_MAP.illegal);
   } else if (type === 'game-end') {
-    play(SOUNDS.gameEnd);
+    play(AUDIO_MAP.gameEnd);
   }
 };
