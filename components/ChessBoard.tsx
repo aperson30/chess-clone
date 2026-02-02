@@ -21,6 +21,7 @@ interface ChessBoardProps {
     classification?: MoveClassification;
   } | null;
   bestMove?: string | null; // e.g., "e2e4"
+  hintSquare?: string | null;
 }
 
 const QualityMarker: React.FC<{ classification: MoveClassification }> = ({ classification }) => {
@@ -99,7 +100,7 @@ const BestMoveArrow: React.FC<{ move: string }> = ({ move }) => {
   );
 };
 
-const ChessBoard: React.FC<ChessBoardProps> = ({ fen, onMove, isDraggable = true, lastMove, bestMove }) => {
+const ChessBoard: React.FC<ChessBoardProps> = ({ fen, onMove, isDraggable = true, lastMove, bestMove, hintSquare }) => {
   const [game, setGame] = useState(new Chess(fen));
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   const [validMoves, setValidMoves] = useState<string[]>([]);
@@ -149,6 +150,7 @@ const ChessBoard: React.FC<ChessBoardProps> = ({ fen, onMove, isDraggable = true
         const isValidMove = validMoves.includes(squareName);
         const isLastMoveOrigin = lastMove?.from === squareName;
         const isLastMoveTarget = lastMove?.to === squareName;
+        const isHint = hintSquare === squareName;
 
         squares.push(
           <div
@@ -158,6 +160,7 @@ const ChessBoard: React.FC<ChessBoardProps> = ({ fen, onMove, isDraggable = true
               ${isDark ? 'bg-[#b58863]' : 'bg-[#f0d9b5]'}
               ${isSelected ? 'bg-yellow-200/60' : ''}
               ${(isLastMoveOrigin || isLastMoveTarget) ? 'bg-yellow-400/30' : ''}
+              ${isHint ? 'ring-[6px] ring-inset ring-emerald-400/60 animate-pulse' : ''}
               ${isValidMove ? 'after:content-[""] after:w-4 after:h-4 after:bg-black/10 after:rounded-full after:z-10' : ''}
             `}
           >

@@ -73,3 +73,13 @@ export interface GameReviewData {
   bestMoves: string[]; // LAN (e.g. "e2e4")
   depth: number;
 }
+
+export interface Puzzle {
+  id: string;
+  title: string;
+  description: string;
+  fen: string;
+  solution: string[]; // LAN strings e.g. ["e2e4", "e7e5"]
+  rating: number;
+  theme: string;
+}
