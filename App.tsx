@@ -12,6 +12,7 @@ import { INITIAL_FEN, SAMPLE_PUZZLES } from './constants';
 import { engine } from './engineService';
 import { playMoveSound, playFeedbackSound } from './soundService';
 import { BoltIcon, PuzzlePieceIcon, PlayIcon, LockClosedIcon, CheckBadgeIcon } from '@heroicons/react/24/solid';
+import { Analytics } from '@vercel/analytics/react';
 
 // --- CHESS.COM STYLE MATH HELPERS ---
 
@@ -652,6 +653,7 @@ const App: React.FC = () => {
           )}
         </div>
       </main>
+      <Analytics />
     </div>
   );
 };
