@@ -282,7 +282,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-[#161512] text-white overflow-hidden font-sans selection:bg-emerald-500/30">
+    <div className="flex h-dvh bg-[#161512] text-white overflow-hidden font-sans selection:bg-emerald-500/30">
       <Sidebar 
         currentMode={mode} 
         onModeChange={(newMode) => {
