@@ -69,4 +69,5 @@ export interface GameReviewData {
   black: GameStats;
   evalHistory: number[];
   moveHistory: string[]; // SAN
+  moveClassifications: MoveClassification[];
 }

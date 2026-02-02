@@ -1,43 +1,50 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Initialize the Google GenAI SDK using the API key from environment variables.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-export const getCoachResponse = async (fen: string, lastMove: string, history: any[]) => {
-  const model = ai.models.generateContent({
+/**
+ * Gets a coaching hint for the current chess position.
+ */
+export const getCoachResponse = async (fen: string, lastMove: string, history: any[], engineBestMove?: string) => {
+  // Use gemini-3-flash-preview for basic text tasks like generating coaching hints.
+  const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: [
-      {
-        role: 'user',
-        parts: [{ 
-          text: `You are a high-level Chess Coach. Current position (FEN): ${fen}. Last move played: ${lastMove}. 
-          Previous history: ${JSON.stringify(history.slice(-5))}.
-          Give a concise, encouraging tactical hint or strategic observation for the player whose turn it is. 
-          Keep it under 3 sentences.` 
-        }]
-      }
-    ],
+    contents: [{
+      parts: [{ 
+        text: `You are a high-level Chess Coach. 
+        Current position (FEN): ${fen}. 
+        Last move played: ${lastMove}. 
+        Engine suggests: ${engineBestMove || 'Unknown'}.
+        Previous history: ${JSON.stringify(history.slice(-5))}.
+        Give a concise, encouraging tactical hint or strategic observation for the player whose turn it is. 
+        Ground your advice in the engine's recommendation if provided.
+        Keep it under 3 sentences.` 
+      }]
+    }],
     config: {
       temperature: 0.7,
       maxOutputTokens: 150,
     }
   });
 
-  const response = await model;
+  // Access the text property directly from the response object.
   return response.text;
 };
 
+/**
+ * Analyzes the position and returns a structured JSON evaluation.
+ */
 export const analyzePosition = async (fen: string) => {
-  const model = ai.models.generateContent({
+  // Use gemini-3-pro-preview for complex reasoning tasks like position analysis.
+  const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
-    contents: [
-      {
-        role: 'user',
-        parts: [{ 
-          text: `Analyze this chess position (FEN): ${fen}. Provide a JSON response.` 
-        }]
-      }
-    ],
+    contents: [{
+      parts: [{ 
+        text: `Analyze this chess position (FEN): ${fen}. Provide a JSON response.` 
+      }]
+    }],
     config: {
       responseMimeType: 'application/json',
       responseSchema: {
@@ -57,40 +64,6 @@ export const analyzePosition = async (fen: string) => {
     }
   });
 
-  const response = await model;
-  return JSON.parse(response.text || '{}');
-};
-
-export const generatePuzzle = async () => {
-  const model = ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: [
-      {
-        role: 'user',
-        parts: [{ 
-          text: `Generate a chess puzzle. Return a JSON object with: 
-          1. FEN of the starting position
-          2. Solution (sequence of moves in SAN)
-          3. Title (e.g., "Back Rank Mate")
-          4. Difficulty (1-5)` 
-        }]
-      }
-    ],
-    config: {
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          fen: { type: Type.STRING },
-          solution: { type: Type.ARRAY, items: { type: Type.STRING } },
-          title: { type: Type.STRING },
-          difficulty: { type: Type.NUMBER }
-        },
-        required: ['fen', 'solution', 'title', 'difficulty']
-      }
-    }
-  });
-
-  const response = await model;
+  // Access the text property directly and parse the JSON.
   return JSON.parse(response.text || '{}');
 };

@@ -11,6 +11,7 @@ interface SidebarProps {
   currentMode: AppMode;
   onModeChange: (mode: AppMode) => void;
   evaluation?: number;
+  showEvaluation?: boolean;
 }
 
 const NavItem: React.FC<{ 
@@ -34,7 +35,7 @@ const NavItem: React.FC<{
   </button>
 );
 
-const Sidebar: React.FC<SidebarProps> = ({ currentMode, onModeChange, evaluation = 0 }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentMode, onModeChange, evaluation = 0, showEvaluation = false }) => {
   const displayScore = (evaluation / 100).toFixed(1);
   const scorePrefix = evaluation > 0 ? '+' : '';
   const isNeutral = Math.abs(evaluation) < 15;
@@ -45,21 +46,23 @@ const Sidebar: React.FC<SidebarProps> = ({ currentMode, onModeChange, evaluation
         <h1 className="text-gray-400 font-black tracking-widest text-xl uppercase">ChessMaster AI</h1>
       </div>
       
-      {/* Live Score Display */}
-      <div className="p-6 border-b border-[#312e2b]">
-        <div className="bg-[#262421] rounded-lg p-5 border border-[#312e2b] shadow-2xl">
-          <div className="flex items-center gap-2 text-gray-500 mb-2">
-            <ChartBarIcon className="w-4 h-4 text-blue-400" />
-            <span className="text-[10px] font-black uppercase tracking-widest">Engine Evaluation</span>
-          </div>
-          <div className={`text-4xl font-black tabular-nums tracking-tighter ${isNeutral ? 'text-gray-200' : (evaluation > 0 ? 'text-white' : 'text-gray-400')}`}>
-            {scorePrefix}{displayScore}
-          </div>
-          <div className="mt-2 text-[10px] font-bold text-gray-600 uppercase">
-            {isNeutral ? 'Even Position' : (evaluation > 0 ? 'White is better' : 'Black is better')}
+      {/* Live Score Display - Only shown when requested */}
+      {showEvaluation && (
+        <div className="p-6 border-b border-[#312e2b]">
+          <div className="bg-[#262421] rounded-lg p-5 border border-[#312e2b] shadow-2xl">
+            <div className="flex items-center gap-2 text-gray-500 mb-2">
+              <ChartBarIcon className="w-4 h-4 text-blue-400" />
+              <span className="text-[10px] font-black uppercase tracking-widest">Engine Evaluation</span>
+            </div>
+            <div className={`text-4xl font-black tabular-nums tracking-tighter ${isNeutral ? 'text-gray-200' : (evaluation > 0 ? 'text-white' : 'text-gray-400')}`}>
+              {scorePrefix}{displayScore}
+            </div>
+            <div className="mt-2 text-[10px] font-bold text-gray-600 uppercase">
+              {isNeutral ? 'Even Position' : (evaluation > 0 ? 'White is better' : 'Black is better')}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="flex-1 flex flex-col py-2">
         <NavItem 

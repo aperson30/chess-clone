@@ -1,233 +1,306 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Chess } from 'chess.js';
-import Sidebar from './components/Sidebar';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Chess, Move } from 'chess.js';
 import ChessBoard from './components/ChessBoard';
 import EvalBar from './components/EvalBar';
 import GameReviewPanel from './components/GameReviewPanel';
 import PGNUpload from './components/PGNUpload';
-import { AppMode, CoachMessage, AnalysisResult, GameReviewData, MoveClassification } from './types';
+import Sidebar from './components/Sidebar';
+import { AppMode, GameReviewData, MoveClassification, GameStats } from './types';
 import { INITIAL_FEN } from './constants';
-import { getCoachResponse, analyzePosition } from './geminiService';
-import { engine, EngineAnalysis } from './engineService';
-import { 
-  ChevronDoubleLeftIcon, 
-  ChevronDoubleRightIcon, 
-  ArrowPathIcon,
-  SparklesIcon,
-  ChartBarIcon,
-} from '@heroicons/react/24/outline';
+import { engine } from './engineService';
+import { BoltIcon } from '@heroicons/react/24/outline';
+
+// Professional move classification thresholds
+const classifyMove = (prevScore: number, currentScore: number, isBest: boolean, isWhite: boolean): MoveClassification => {
+  const loss = isWhite ? (prevScore - currentScore) : (currentScore - prevScore);
+  
+  if (isBest) return MoveClassification.BEST;
+  
+  if (loss <= 15) return MoveClassification.EXCELLENT;
+  if (loss <= 45) return MoveClassification.GOOD;
+  if (loss <= 100) return MoveClassification.INACCURACY;
+  if (loss <= 250) return MoveClassification.MISTAKE;
+  if (loss <= 500) return MoveClassification.MISS;
+  return MoveClassification.BLUNDER;
+};
+
+const createEmptyStats = (): GameStats => ({
+  accuracy: 0,
+  moves: {
+    [MoveClassification.BRILLIANT]: 0,
+    [MoveClassification.GREAT]: 0,
+    [MoveClassification.BEST]: 0,
+    [MoveClassification.EXCELLENT]: 0,
+    [MoveClassification.GOOD]: 0,
+    [MoveClassification.BOOK]: 0,
+    [MoveClassification.INACCURACY]: 0,
+    [MoveClassification.MISTAKE]: 0,
+    [MoveClassification.MISS]: 0,
+    [MoveClassification.BLUNDER]: 0,
+  },
+  ratingEstimate: 1200
+});
 
 const App: React.FC = () => {
-  const [mode, setMode] = useState<AppMode>(AppMode.GAME_REVIEW);
+  const [game, setGame] = useState(new Chess());
   const [fen, setFen] = useState(INITIAL_FEN);
-  const [game, setGame] = useState(new Chess(INITIAL_FEN));
-  const [messages, setMessages] = useState<CoachMessage[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [geminiAnalysis, setGeminiAnalysis] = useState<AnalysisResult | null>(null);
-  const [stockfishAnalysis, setStockfishAnalysis] = useState<EngineAnalysis | null>(null);
-  const [isEngineEnabled, setIsEngineEnabled] = useState(true);
-  
-  const [lastMoveInfo, setLastMoveInfo] = useState<{from: string, to: string, classification?: MoveClassification} | null>(null);
+  const [mode, setMode] = useState<AppMode>(AppMode.DASHBOARD);
   const [reviewData, setReviewData] = useState<GameReviewData | null>(null);
-  const [moveIndex, setMoveIndex] = useState(-1);
-  const [moves, setMoves] = useState<string[]>([]);
-  
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [currentMoveIndex, setCurrentMoveIndex] = useState(-1);
+  const [evaluation, setEvaluation] = useState(0);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
 
+  // Initialize engine
   useEffect(() => {
-    engine.init().then(() => {
-      runEngineAnalysis(INITIAL_FEN);
-    });
+    engine.init().catch(console.error);
   }, []);
 
-  const runEngineAnalysis = (currentFen: string) => {
-    if (!isEngineEnabled) return;
-    engine.analyze(currentFen, 18, (analysis) => {
-      setStockfishAnalysis(analysis);
-    });
-  };
-
-  const handleMove = async (move: any) => {
+  const handleMove = useCallback((move: Move) => {
     const newGame = new Chess(game.fen());
-    newGame.move(move);
-    setGame(newGame);
-    setFen(newGame.fen());
-    
-    // Quick classification based on engine recommendation from PREVIOUS position
-    let classification = MoveClassification.GOOD;
-    if (stockfishAnalysis && move.lan === stockfishAnalysis.bestMove) {
-      classification = MoveClassification.BEST;
-    } else if (move.flags.includes('b')) {
-      classification = MoveClassification.BOOK;
-    }
-    
-    setLastMoveInfo({ from: move.from, to: move.to, classification });
-    runEngineAnalysis(newGame.fen());
-
-    if (mode === AppMode.PLAY_COACH) {
-      setIsLoading(true);
-      try {
-        const response = await getCoachResponse(newGame.fen(), move.san, messages);
-        addMessage(response || "Interesting move!", 'coach');
-      } catch (error) {
-        console.error("Coach failed:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-  };
-
-  const addMessage = (text: string, role: CoachMessage['role']) => {
-    setMessages(prev => [...prev, {
-      id: Math.random().toString(36).substr(2, 9),
-      role,
-      text,
-      timestamp: Date.now()
-    }]);
-  };
-
-  const handleUploadPGN = async (pgn: string) => {
-    setIsLoading(true);
     try {
-      const tempGame = new Chess();
-      tempGame.loadPgn(pgn);
-      const history = tempGame.history({ verbose: true });
-      setMoves(history.map(m => m.lan));
+      newGame.move(move);
+      setGame(newGame);
+      setFen(newGame.fen());
       
-      const dummyReview: GameReviewData = {
-        white: {
-          accuracy: 72.4, ratingEstimate: 950,
-          moves: { [MoveClassification.BRILLIANT]: 0, [MoveClassification.GREAT]: 2, [MoveClassification.BEST]: 15, [MoveClassification.EXCELLENT]: 10, [MoveClassification.GOOD]: 10, [MoveClassification.BOOK]: 4, [MoveClassification.INACCURACY]: 2, [MoveClassification.MISTAKE]: 1, [MoveClassification.MISS]: 0, [MoveClassification.BLUNDER]: 0 }
-        },
-        black: {
-          accuracy: 68.1, ratingEstimate: 900,
-          moves: { [MoveClassification.BRILLIANT]: 0, [MoveClassification.GREAT]: 1, [MoveClassification.BEST]: 12, [MoveClassification.EXCELLENT]: 12, [MoveClassification.GOOD]: 12, [MoveClassification.BOOK]: 4, [MoveClassification.INACCURACY]: 3, [MoveClassification.MISTAKE]: 2, [MoveClassification.MISS]: 1, [MoveClassification.BLUNDER]: 1 }
-        },
-        evalHistory: history.map((_, i) => Math.sin(i / 5) * 150 + (Math.random() - 0.5) * 50),
-        moveHistory: history.map(m => m.san)
+      // Real-time engine eval for the board
+      engine.getAnalysis(newGame.fen()).then(analysis => {
+        setEvaluation(analysis.score);
+      });
+    } catch (e) {
+      console.error("Invalid move", e);
+    }
+  }, [game]);
+
+  const handlePGNUpload = async (pgn: string) => {
+    setIsAnalyzing(true);
+    setAnalysisProgress(0);
+    const tempGame = new Chess();
+    try {
+      tempGame.loadPgn(pgn);
+    } catch (e) {
+      alert("Invalid PGN format. Please check the content.");
+      setIsAnalyzing(false);
+      return;
+    }
+
+    const historyVerbose = tempGame.history({ verbose: true });
+    if (historyVerbose.length === 0) {
+      alert("This PGN contains no moves.");
+      setIsAnalyzing(false);
+      return;
+    }
+
+    const playbackGame = new Chess();
+    const evalHistory: number[] = [0];
+    const moveSANs: string[] = [];
+    const moveClassifications: MoveClassification[] = [];
+
+    const whiteStats = createEmptyStats();
+    const blackStats = createEmptyStats();
+
+    try {
+      await engine.init();
+      
+      // Initial eval for move comparison
+      const initialEvalRes = await engine.getAnalysis(INITIAL_FEN, 10);
+      let lastEval = initialEvalRes.score;
+
+      // Analyze each move
+      for (let i = 0; i < historyVerbose.length; i++) {
+        const move = historyVerbose[i];
+        
+        // Before playing the move, what was the best move in the position?
+        // (Simple version: we classify based on centipawn loss)
+        playbackGame.move(move);
+        moveSANs.push(move.san);
+        const currentFen = playbackGame.fen();
+        
+        const currentEval = await engine.getAnalysis(currentFen, 11);
+        const score = currentEval.score;
+        evalHistory.push(score);
+        
+        const isWhite = i % 2 === 0;
+        const classification = classifyMove(lastEval, score, false, isWhite);
+        moveClassifications.push(classification);
+        
+        const stats = isWhite ? whiteStats : blackStats;
+        stats.moves[classification]++;
+        
+        lastEval = score;
+        setAnalysisProgress(Math.round(((i + 1) / historyVerbose.length) * 100));
+      }
+
+      const calculateAccuracy = (stats: GameStats, totalMoves: number) => {
+        if (totalMoves === 0) return 100;
+        const weights = {
+          [MoveClassification.BRILLIANT]: 1,
+          [MoveClassification.GREAT]: 1,
+          [MoveClassification.BEST]: 1,
+          [MoveClassification.EXCELLENT]: 0.95,
+          [MoveClassification.GOOD]: 0.8,
+          [MoveClassification.BOOK]: 1,
+          [MoveClassification.INACCURACY]: 0.5,
+          [MoveClassification.MISTAKE]: 0.2,
+          [MoveClassification.MISS]: 0,
+          [MoveClassification.BLUNDER]: -0.5
+        };
+        
+        let sum = 0;
+        Object.entries(stats.moves).forEach(([key, count]) => {
+          sum += count * weights[key as MoveClassification];
+        });
+        
+        return Math.max(0, Math.min(100, (sum / totalMoves) * 100));
       };
 
-      setReviewData(dummyReview);
+      const whiteMoveCount = Math.ceil(historyVerbose.length / 2);
+      const blackMoveCount = Math.floor(historyVerbose.length / 2);
+
+      whiteStats.accuracy = calculateAccuracy(whiteStats, whiteMoveCount);
+      blackStats.accuracy = calculateAccuracy(blackStats, blackMoveCount);
+      whiteStats.ratingEstimate = Math.round(800 + whiteStats.accuracy * 18);
+      blackStats.ratingEstimate = Math.round(800 + blackStats.accuracy * 18);
+
+      setReviewData({
+        white: whiteStats,
+        black: blackStats,
+        evalHistory,
+        moveHistory: moveSANs,
+        moveClassifications
+      });
+      setMode(AppMode.GAME_REVIEW);
       setGame(new Chess());
       setFen(INITIAL_FEN);
-      setMoveIndex(-1);
-      setLastMoveInfo(null);
-    } catch (e) {
-      alert("Invalid PGN file.");
+      setCurrentMoveIndex(-1);
+    } catch (err) {
+      console.error("Analysis Error:", err);
+      alert("An error occurred during engine analysis.");
     } finally {
-      setIsLoading(false);
+      setIsAnalyzing(false);
     }
   };
 
-  const jumpToMove = (index: number) => {
-    if (index < -1 || index >= moves.length) return;
-    const tempGame = new Chess();
-    let lastMoveObj = null;
-    for (let i = 0; i <= index; i++) {
-      lastMoveObj = tempGame.move(moves[i]);
+  const startReview = () => {
+    setCurrentMoveIndex(0);
+    const reviewGame = new Chess();
+    if (reviewData?.moveHistory[0]) {
+      reviewGame.move(reviewData.moveHistory[0]);
     }
-    setGame(tempGame);
-    setFen(tempGame.fen());
-    setMoveIndex(index);
-    if (lastMoveObj) {
-      setLastMoveInfo({ from: lastMoveObj.from, to: lastMoveObj.to, classification: MoveClassification.GOOD });
+    setGame(reviewGame);
+    setFen(reviewGame.fen());
+    setEvaluation(reviewData?.evalHistory[1] || 0);
+  };
+
+  const navigateReview = (direction: 'next' | 'prev') => {
+    if (!reviewData) return;
+    
+    let newIndex = currentMoveIndex;
+    if (direction === 'next' && currentMoveIndex < reviewData.moveHistory.length - 1) {
+      newIndex++;
+    } else if (direction === 'prev' && currentMoveIndex > 0) {
+      newIndex--;
+    } else if (direction === 'prev' && currentMoveIndex === 0) {
+      newIndex = -1;
     } else {
-      setLastMoveInfo(null);
+      return;
     }
-    runEngineAnalysis(tempGame.fen());
-  };
 
-  const handleModeChange = (newMode: AppMode) => {
-    setMode(newMode);
-    if (newMode !== AppMode.GAME_REVIEW) setReviewData(null);
-  };
-
-  const handleGeminiAnalysis = async () => {
-    setIsLoading(true);
-    try {
-      const result = await analyzePosition(game.fen());
-      addMessage(`Strategic Advice: ${result.explanation}`, 'coach');
-    } catch (e) {
-      addMessage("Gemini analysis failed.", 'system');
-    } finally {
-      setIsLoading(false);
+    const reviewGame = new Chess();
+    if (newIndex === -1) {
+      setGame(reviewGame);
+      setFen(INITIAL_FEN);
+      setCurrentMoveIndex(-1);
+      setEvaluation(0);
+      return;
     }
+
+    for (let i = 0; i <= newIndex; i++) {
+      reviewGame.move(reviewData.moveHistory[i]);
+    }
+    setGame(reviewGame);
+    setFen(reviewGame.fen());
+    setCurrentMoveIndex(newIndex);
+    setEvaluation(reviewData.evalHistory[newIndex + 1]);
   };
 
-  const resetGame = () => {
-    setGame(new Chess(INITIAL_FEN));
-    setFen(INITIAL_FEN);
-    setMessages([]);
-    setStockfishAnalysis(null);
-    setReviewData(null);
-    setMoveIndex(-1);
-    setLastMoveInfo(null);
-    runEngineAnalysis(INITIAL_FEN);
+  // Helper to get the last move's squares and classification for rendering
+  const getCurrentMoveData = () => {
+    if (currentMoveIndex < 0 || !reviewData) return null;
+    const history = game.history({ verbose: true });
+    const lastMove = history[history.length - 1];
+    if (!lastMove) return null;
+
+    return {
+      from: lastMove.from,
+      to: lastMove.to,
+      classification: reviewData.moveClassifications[currentMoveIndex]
+    };
   };
 
   return (
-    <div className="flex h-screen bg-[#1a1917] overflow-hidden text-white">
+    <div className="flex h-screen bg-[#161512] text-white overflow-hidden font-sans selection:bg-emerald-500/30">
       <Sidebar 
         currentMode={mode} 
-        onModeChange={handleModeChange} 
-        evaluation={stockfishAnalysis?.score || 0}
+        onModeChange={(newMode) => {
+          if (newMode === AppMode.DASHBOARD) {
+            setReviewData(null);
+            setGame(new Chess());
+            setFen(INITIAL_FEN);
+            setCurrentMoveIndex(-1);
+          }
+          setMode(newMode);
+        }} 
+        evaluation={evaluation}
+        showEvaluation={mode === AppMode.GAME_REVIEW && currentMoveIndex >= 0}
       />
-
-      <main className="flex-1 flex flex-col items-center justify-center overflow-auto p-4 md:p-8 gap-6">
-        {mode === AppMode.GAME_REVIEW && !reviewData ? (
-          <PGNUpload onUpload={handleUploadPGN} />
-        ) : (
-          <div className="w-full h-full flex flex-col lg:flex-row items-center justify-center gap-6">
-            <div className="flex-shrink-0 flex flex-col gap-4">
-              <div className="bg-[#262421] p-4 rounded-lg shadow-xl flex items-center justify-between border border-[#312e2b]">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center font-bold text-xl shadow-lg">AI</div>
-                  <div>
-                    <h3 className="font-bold text-sm">{mode === AppMode.GAME_REVIEW ? "Analysis Mode" : "Chess Helper"}</h3>
-                    <p className="text-xs text-gray-400">Stockfish 16.1 Active</p>
-                  </div>
-                </div>
-                {isLoading && <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>}
-              </div>
-
-              <div className="flex gap-4">
-                <EvalBar score={stockfishAnalysis?.score || 0} turn={game.turn()} />
-                <ChessBoard 
-                  fen={fen} 
-                  onMove={handleMove} 
-                  isDraggable={mode !== AppMode.GAME_REVIEW} 
-                  lastMove={lastMoveInfo}
-                  showBestMove={false} // Removed automatic best move arrow as per user request
-                />
-              </div>
-
-              <div className="bg-[#262421] p-3 rounded-lg flex items-center gap-4 justify-center border border-[#312e2b] shadow-inner">
-                <div className="flex items-center gap-2">
-                  <button onClick={resetGame} className="p-2 hover:bg-[#312e2b] rounded transition-colors text-gray-400" title="Reset Game">
-                    <ArrowPathIcon className="w-6 h-6" />
-                  </button>
-                  <button className="p-2 hover:bg-[#312e2b] rounded transition-colors text-gray-400" title="Toggle Engine" onClick={() => setIsEngineEnabled(!isEngineEnabled)}>
-                    <ChartBarIcon className={`w-6 h-6 ${isEngineEnabled ? 'text-blue-400' : 'text-gray-600'}`} />
-                  </button>
-                </div>
-                
-                <div className="w-px h-6 bg-[#312e2b]" />
-
-                <div className="flex items-center gap-1">
-                  <button disabled={moveIndex < 0} onClick={() => jumpToMove(moveIndex - 1)} className="p-2 hover:bg-[#312e2b] rounded transition-colors text-gray-400 disabled:opacity-30">
-                    <ChevronDoubleLeftIcon className="w-6 h-6" />
-                  </button>
-                  <button disabled={moveIndex >= moves.length - 1} onClick={() => jumpToMove(moveIndex + 1)} className="p-2 hover:bg-[#312e2b] rounded transition-colors text-gray-400 disabled:opacity-30">
-                    <ChevronDoubleRightIcon className="w-6 h-6" />
-                  </button>
-                  <button onClick={handleGeminiAnalysis} className="p-2 hover:bg-[#312e2b] rounded transition-colors text-green-500">
-                    <SparklesIcon className="w-6 h-6" />
-                  </button>
-                </div>
-              </div>
+      
+      <main className="flex-1 flex flex-col items-center justify-center p-8 relative">
+        {isAnalyzing && (
+          <div className="absolute inset-0 z-50 bg-[#161512]/95 backdrop-blur-md flex flex-col items-center justify-center">
+            <div className="w-64 h-2 bg-[#262421] rounded-full overflow-hidden mb-6 shadow-inner">
+              <div 
+                className="h-full bg-[#81b64c] transition-all duration-300 shadow-[0_0_15px_rgba(129,182,76,0.4)]" 
+                style={{ width: `${analysisProgress}%` }}
+              />
             </div>
-            {reviewData && <GameReviewPanel data={reviewData} onNewGame={resetGame} />}
+            <div className="flex flex-col items-center gap-2">
+               <BoltIcon className="w-10 h-10 text-[#81b64c] animate-bounce" />
+               <p className="text-white font-black text-2xl tracking-tighter">STOCKFISH IS THINKING</p>
+               <p className="text-[#81b64c] font-black uppercase tracking-widest text-xs opacity-80">
+                 Analyzing Position {analysisProgress}%
+               </p>
+            </div>
+          </div>
+        )}
+
+        {mode === AppMode.DASHBOARD ? (
+          <PGNUpload onUpload={handlePGNUpload} />
+        ) : (
+          <div className="flex gap-8 items-start h-[600px] animate-in fade-in duration-500">
+            <EvalBar score={evaluation} turn={game.turn()} />
+            <div className="w-[600px] shadow-2xl">
+              <ChessBoard 
+                fen={fen} 
+                onMove={handleMove}
+                isDraggable={mode !== AppMode.GAME_REVIEW}
+                lastMove={getCurrentMoveData()}
+              />
+            </div>
+            {mode === AppMode.GAME_REVIEW && reviewData && (
+              <GameReviewPanel 
+                data={reviewData}
+                onNewGame={() => setMode(AppMode.DASHBOARD)}
+                onStartReview={startReview}
+                onNext={() => navigateReview('next')}
+                onPrev={() => navigateReview('prev')}
+                currentMoveIndex={currentMoveIndex}
+                totalMoves={reviewData.moveHistory.length}
+                currentMoveSAN={reviewData.moveHistory[currentMoveIndex]}
+                currentMoveClassification={reviewData.moveClassifications[currentMoveIndex]}
+              />
+            )}
           </div>
         )}
       </main>
