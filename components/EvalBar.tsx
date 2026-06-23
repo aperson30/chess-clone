@@ -22,7 +22,7 @@ const EvalBar: React.FC<EvalBarProps> = ({ score }) => {
   const getPercentage = () => {
     if (isMate) return score > 0 ? 100 : 0;
     // Standardizing +/- 5.0 as the "full" range for visual clarity
-    // (Most games are decided by 5 points)
+    // Most games are decided by 5 points
     const clamp = (val: number, min: number, max: number) => Math.min(Math.max(val, min), max);
     const normalized = clamp(score, -500, 500);
     return ((normalized + 500) / 1000) * 100;
