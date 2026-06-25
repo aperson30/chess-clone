@@ -16,7 +16,7 @@ import { BoltIcon, PuzzlePieceIcon, PlayIcon, LockClosedIcon, CheckBadgeIcon } f
 // --- CHESS.COM STYLE MATH HELPERS ---
 
 /**
- * Converts raw centipawns to a winning percentage (0 to 100).
+ * Convert a raw centipawns to a winning percentage (0 to 100).
  * Uses a sigmoid curve so that differences in equal positions matter more 
  * than differences in completely won/lost positions.
  */
