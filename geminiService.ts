@@ -1,7 +1,7 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Initialize the Google GenAI SDK using the API key from environment variables.
+// Initializes the Google GenAI SDK using the API key from environment variables.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
