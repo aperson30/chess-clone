@@ -5,7 +5,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
- * Gets a coaching hint for the current chess position.
+ * Get a coaching hint for the current chess position.
  */
 export const getCoachResponse = async (fen: string, lastMove: string, history: any[], engineBestMove?: string) => {
   // Use gemini-3-flash-preview for basic text tasks like generating coaching hints.
