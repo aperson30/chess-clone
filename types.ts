@@ -78,7 +78,7 @@ export interface Puzzle {
   id: string;
   title: string;
   description: string;
-  fen: string;
+  fen: string; //String
   solution: string[]; // LAN strings e.g. ["e2e4", "e7e5"]
   rating: number;
   theme: string;
