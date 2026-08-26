@@ -17,7 +17,7 @@ import { BoltIcon, PuzzlePieceIcon, PlayIcon, LockClosedIcon, CheckBadgeIcon } f
 
 /**
  * Convert a raw centipawns to a winning percentage (0 to 100).
- * Uses a sigmoid curve so that differences in equal positions matter more 
+ * Uses a sigmoid curve so that differences in equal positions matter mores 
  * than differences in completely won/lost positions.
  */
 const getWinChance = (centipawns: number): number => {
