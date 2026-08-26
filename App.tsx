@@ -13,7 +13,7 @@ import { engine } from './engineService';
 import { playMoveSound, playFeedbackSound } from './soundService';
 import { BoltIcon, PuzzlePieceIcon, PlayIcon, LockClosedIcon, CheckBadgeIcon } from '@heroicons/react/24/solid';
 
-// --- CHESS.COM STYLE MATH HELPERS --
+// --- CHESS.COM STYLE MATH HELPERS ---
 
 /**
  * Convert a raw centipawns to a winning percentage (0 to 100).
