@@ -1,7 +1,7 @@
 
 import { Chess, Move } from 'chess.js';
 
-// Reliable audio sources (Lichess GitHub Raw)
+// Reliable audio sources ()
 // We use these because they are open source, reliable, and CORS-friendly.
 const AUDIO_MAP = {
   move: new Audio('https://raw.githubusercontent.com/lichess-org/lila/master/public/sound/standard/Move.mp3'),
